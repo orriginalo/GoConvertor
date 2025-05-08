@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 )
 
 var audioExtentions = []string{".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".aiff", ".au", ".opus"}
-var imageExtentions = []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".tiff", ".heic", ".jfif", ".bmp", ".apng", ".avif", ".tif", ".tga", ".psd", ".eps", ".ai", ".indd", ".raw", ".nef"}
+var imageExtentions = []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".tiff", ".heic", ".jfif", ".bmp", ".apng", ".avif", ".tif", ".tga", ".psd", ".eps", ".ai", ".indd", ".raw", ".NEF"}
 
 var (
 	hasAudio, hasImage, hasFolders       bool
@@ -22,9 +23,8 @@ var (
 	filesToConvertChan                   chan FileToConvert
 	filesToConvert                       []FileToConvert
 	totalConverterFiles                  int
+	maxWorkers                           int
 )
-
-const maxWorkers = 1
 
 type FileToConvert struct {
 	Path      string
@@ -34,6 +34,7 @@ type FileToConvert struct {
 
 func init() {
 	filesToConvertChan = make(chan FileToConvert)
+	maxWorkers = runtime.NumCPU()
 }
 
 func main() {
@@ -148,11 +149,11 @@ func ConvertFile(path string, format string, isAudio bool, workerNum int) {
 
 	switch isAudio {
 	case true:
-		outputPath := fmt.Sprintf("%s.%s", path[:len(path)-len(filepath.Ext(path))], format)
+		outputPath := fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
 		cmd = exec.Command("ffmpeg", "-i", path, outputPath)
 
 	case false:
-		outputPath := fmt.Sprintf("%s.%s", path[:len(path)-len(filepath.Ext(path))], format)
+		outputPath := fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
 		cmd = exec.Command("magick", path, outputPath)
 	}
 
