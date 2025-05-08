@@ -13,7 +13,15 @@ import (
 )
 
 var audioExtentions = []string{".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".aiff", ".au", ".opus"}
-var imageExtentions = []string{".png", ".jpg", ".jpeg", ".webp", ".svg", ".tiff", ".heic", ".jfif", ".bmp", ".apng", ".avif", ".tif", ".tga", ".psd", ".eps", ".ai", ".indd", ".raw", ".NEF"}
+var imageExtentions = []string{
+	".jpg", ".jpeg", ".png", ".webp", ".ico", ".gif", ".bmp", ".tiff", ".tif", ".svg", ".heic", ".heif", ".avif",
+
+	".jfif", ".apng", ".psd", ".exr", ".tga", ".pdf", ".eps", ".djvu",
+
+	".raw", ".cr2", ".nef", ".arw", ".dng", ".rw2", ".orf", ".sr2",
+
+	".pbm", ".pgm", ".ppm", ".pnm", ".xpm", ".xbm", ".NEF",
+}
 
 var (
 	hasAudio, hasImage, hasFolders       bool
