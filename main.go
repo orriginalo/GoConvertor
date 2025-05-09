@@ -6,10 +6,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/spf13/viper"
 )
 
 var audioExtentions = []string{".mp3", ".wav", ".flac", ".ogg", ".aac", ".m4a", ".wma", ".aiff", ".au", ".opus"}
@@ -32,6 +34,7 @@ var (
 	filesToConvert                       []FileToConvert
 	totalConverterFiles                  int
 	maxWorkers                           int
+	configPath                           string
 )
 
 type FileToConvert struct {
@@ -43,9 +46,23 @@ type FileToConvert struct {
 func init() {
 	filesToConvertChan = make(chan FileToConvert)
 	maxWorkers = runtime.NumCPU()
+	switch runtime.GOOS {
+	case "windows":
+		configPath = filepath.Join(os.Getenv("APPDATA"), "GoConvertor")
+	case "linux":
+		homeDir, _ := os.UserHomeDir()
+		configPath = filepath.Join(homeDir, ".config", "goconvertor")
+	}
+
+	LoadConfig(configPath)
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--config" {
+		OpenConfigMenu()
+		return
+	}
+
 	survey.AskOne(&survey.Input{
 		Message: "Укажите путь к директории с файлами:",
 		Default: ".",
@@ -154,22 +171,93 @@ func ProcessFiles(filesToConvert chan FileToConvert, wg *sync.WaitGroup) {
 
 func ConvertFile(path string, format string, isAudio bool, workerNum int) {
 	var cmd *exec.Cmd
+	var outputPath string
 
 	switch isAudio {
 	case true:
-		outputPath := fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
+		outputPath = fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
+		if viper.GetBool("save_converted_files_into_folder") {
+			outputPath = filepath.Join(filepath.Dir(outputPath), "converted", filepath.Base(outputPath))
+		}
 		cmd = exec.Command("ffmpeg", "-i", path, outputPath)
 
 	case false:
-		outputPath := fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
+		outputPath = fmt.Sprintf("%s%s", path[:len(path)-len(filepath.Ext(path))], format)
+		if viper.GetBool("save_converted_files_into_folder") {
+			outputPath = filepath.Join(filepath.Dir(outputPath), "converted", filepath.Base(outputPath))
+		}
 		cmd = exec.Command("magick", path, outputPath)
 	}
-
+	if viper.GetBool("save_converted_files_into_folder") {
+		outputDir := filepath.Dir(outputPath)
+		if err := os.MkdirAll(outputDir, os.ModePerm); err != nil {
+			fmt.Printf("Не удалось создать папку '%s': %v\n", outputDir, err)
+			return
+		}
+	}
 	err := cmd.Run()
 	if err != nil {
 		fmt.Printf("Ошибка при конвертации файла '%s': %v\n", path, err)
 	} else {
-		fmt.Printf("Конвертация файла '%s' завершена успешно.\n", path)
+		fmt.Printf("Конвертация файла '%s' завершена успешно.\n", path) // TODO: Добавить удаление исходных файлов
+		if viper.GetBool("delete_source_files") {
+			os.Remove(path)
+		}
 		totalConverterFiles++
+	}
+}
+
+func OpenConfigMenu() {
+	options := []string{
+		"Удалять исходные файлы после конвертации",
+		"Сохранять конвертированные файлы в отдельную папку",
+	}
+
+	var selected []string
+	var defaults []string
+
+	if viper.GetBool("delete_source_files") {
+		defaults = append(defaults, "Удалять исходные файлы после конвертации")
+	}
+	if viper.GetBool("save_converted_files_into_folder") {
+		defaults = append(defaults, "Сохранять конвертированные файлы в отдельную папку")
+	}
+
+	prompt := &survey.MultiSelect{
+		Message: "Выберите нужные опции:",
+		Options: options,
+		Default: defaults,
+	}
+	survey.AskOne(prompt, &selected)
+
+	viper.Set("delete_source_files", slices.Contains(selected, "Удалять исходные файлы после конвертации"))
+	viper.Set("save_converted_files_into_folder", slices.Contains(selected, "Сохранять конвертированные файлы в отдельную папку"))
+
+	err := viper.WriteConfig()
+	if err != nil {
+		fmt.Println("Ошибка при записи конфигурационного файла:", err)
+	}
+}
+
+func LoadConfig(path string) {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(path)
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			fmt.Println("Конфигурационный файл не найден. Создаю новый...")
+			viper.Set("delete_source_files", false)
+			viper.Set("save_converted_files_into_folder", false)
+
+			if err := os.MkdirAll(path, os.ModePerm); err != nil {
+				fmt.Println("Ошибка при создании папки для конфигурационного файла:", err)
+				return
+			}
+
+			viper.WriteConfigAs(filepath.Join(path, "config.yaml"))
+			return
+		} else {
+			fmt.Println("Ошибка при чтении конфигурационного файла:", err)
+		}
 	}
 }
