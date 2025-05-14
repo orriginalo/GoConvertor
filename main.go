@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +23,7 @@ var imageExtentions = []string{
 
 	".raw", ".cr2", ".nef", ".arw", ".dng", ".rw2", ".orf", ".sr2",
 
-	".pbm", ".pgm", ".ppm", ".pnm", ".xpm", ".xbm", ".NEF",
+	".pbm", ".pgm", ".ppm", ".pnm", ".xpm", ".xbm", ".nef",
 }
 
 var (
@@ -85,7 +86,7 @@ func main() {
 			continue
 		}
 
-		ext := filepath.Ext(entry.Name())
+		ext := strings.ToLower(filepath.Ext(entry.Name()))
 		for _, audioExt := range audioExtentions {
 			if ext == audioExt {
 				hasAudio = true
